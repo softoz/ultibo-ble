@@ -424,6 +424,8 @@ end;
 function OpenUART0 : boolean;
 var
   res : LongWord;
+  BoardType: LongWord;
+  FlowControl: LongWord;
 begin
   Result := false;
   UART0 := SerialDeviceFindByDescription (BCM2710_UART0_DESCRIPTION);
@@ -432,12 +434,41 @@ begin
         Log ('Can''t find UART0');
         exit;
       end;
-  res := SerialDeviceOpen (UART0, 115200, SERIAL_DATA_8BIT, SERIAL_STOP_1BIT, SERIAL_PARITY_NONE, SERIAL_FLOW_NONE, 0, 0);
+
+  BoardType := BoardGetType;
+  FlowControl := SERIAL_FLOW_NONE;
+  case BoardType of
+    BOARD_TYPE_RPI_ZERO_W,
+    BOARD_TYPE_RPI3B_PLUS,
+    BOARD_TYPE_RPI3A_PLUS: FlowControl := SERIAL_FLOW_RTS_CTS;
+    //BOARD_TYPE_RPI4B
+    //BOARD_TYPE_RPI400
+    //BOARD_TYPE_RPI_COMPUTE4
+    //BOARD_TYPE_RPI_ZERO2_W
+  end;
+
+  res := SerialDeviceOpen (UART0, 115200, SERIAL_DATA_8BIT, SERIAL_STOP_1BIT, SERIAL_PARITY_NONE, FlowControl, 0, 0);
   if res = ERROR_SUCCESS then
     begin
+      GPIOFunctionSelect (GPIO_PIN_14, GPIO_FUNCTION_IN);
       GPIOFunctionSelect (GPIO_PIN_15, GPIO_FUNCTION_IN);
+
       GPIOFunctionSelect (GPIO_PIN_32, GPIO_FUNCTION_ALT3);     // TXD0
       GPIOFunctionSelect (GPIO_PIN_33, GPIO_FUNCTION_ALT3);     // RXD0
+      GPIOPullSelect (GPIO_PIN_32, GPIO_PULL_NONE);
+      GPIOPullSelect (GPIO_PIN_33, GPIO_PULL_UP);
+
+      if FlowControl > SERIAL_FLOW_NONE then
+      begin
+        GPIOFunctionSelect (GPIO_PIN_16, GPIO_FUNCTION_IN);
+        GPIOFunctionSelect (GPIO_PIN_17, GPIO_FUNCTION_IN);
+
+        GPIOFunctionSelect(GPIO_PIN_30,GPIO_FUNCTION_ALT3);     // RTS0
+        GPIOFunctionSelect(GPIO_PIN_31,GPIO_FUNCTION_ALT3);     // CTS0
+        GPIOPullSelect(GPIO_PIN_30,GPIO_PULL_UP);
+        GPIOPullSelect(GPIO_PIN_31,GPIO_PULL_NONE);
+      end;
+
       Result := true;
       ReadHandle := BeginThread (@ReadExecute, nil, ReadHandle, THREAD_STACK_DEFAULT_SIZE);
       Result := ReadHandle <> INVALID_HANDLE_VALUE;

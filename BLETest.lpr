@@ -31,7 +31,15 @@ uses
   uTFTP, winsock2,
 {$endif}
   uLog, uBLE,
-  Ultibo, uHCI
+  Ultibo, uHCI,
+
+  ShellFilesystem,
+  ShellUpdate,
+  RemoteShell,
+
+  HTTP,
+  WebStatus
+
   { Add additional units here };
 
 type
@@ -43,7 +51,8 @@ type
   end;
 
 var
-  Console1, Console2, Console3 : TWindowHandle;
+HTTPListener : THTTPListener;
+Console1, Console2, Console3 : TWindowHandle;
 {$ifdef use_tftp}
   IPAddress : string;
 {$endif}
@@ -190,7 +199,15 @@ begin
   UpdateBeacons;
 end;
 
+var
+  BoardType: LongWord;
+  FileName: String;
+
 begin
+  HTTPListener:=THTTPListener.Create;
+  HTTPListener.Active:=True;
+  WebStatusRegister(HTTPListener,'','',True);
+
   Console1 := ConsoleWindowCreate (ConsoleDeviceGetDefault, CONSOLE_POSITION_LEFT, true);
   Console2 := ConsoleWindowCreate (ConsoleDeviceGetDefault, CONSOLE_POSITION_TOPRIGHT, false);
   Console3 := ConsoleWindowCreate (ConsoleDeviceGetDefault, CONSOLE_POSITION_BOTTOMRIGHT, false);
@@ -210,12 +227,25 @@ begin
   Log2 ('');
 {$endif}
 
+  BoardType := BoardGetType;
+  FileName := '';
+  case BoardType of
+    BOARD_TYPE_RPI3B,
+    BOARD_TYPE_RPI_ZERO_W: FileName := 'BCM43430A1.hcd';
+    BOARD_TYPE_RPI3B_PLUS,
+    BOARD_TYPE_RPI3A_PLUS: FileName := 'BCM4345C0.hcd';
+    //BOARD_TYPE_RPI4B
+    //BOARD_TYPE_RPI400
+    //BOARD_TYPE_RPI_COMPUTE4
+    //BOARD_TYPE_RPI_ZERO2_W
+  end;
+
   SetMarkerEvent (@DoMarkerEvent);       // set marker event (called when marker processed on event queue)
   SetBeaconEvent (@DoBeaconEvent);       // set beacon event (called when beacon is detected)
   AddMarker (OPEN_PORT);                 // open uart
   AddMarker (DELAY_50MSEC);              // ensure read thread has started
   ResetChip;                             // reset chip
-  BCMLoadFirmware ('BCM43430A1.hcd');    // load firmware
+  BCMLoadFirmware (FileName);            // load firmware
   ReadLocalName;                         // read new chip name
   ReadLocalVersion;                      // read new HCI version
   ReadBDADDR;                            // read newly assigned BD address
